@@ -143,3 +143,59 @@ elif page == "View Data":
 
     except Exception:
         st.error("Could not retrieve records from the database.")
+
+
+st.divider()
+st.header("📊 Waste Analytics Dashboard")
+
+try:
+    response = supabase.table("waste_entries").select("*").execute()
+    analytics_df = pd.DataFrame(response.data)
+
+    if analytics_df.empty:
+        st.info("No waste data available yet. Add a waste entry first.")
+    else:
+        analytics_df["weight_kg"] = pd.to_numeric(
+            analytics_df["weight_kg"], errors="coerce"
+        )
+        analytics_df = analytics_df.dropna(subset=["weight_kg"])
+
+        total_waste = analytics_df["weight_kg"].sum()
+        total_entries = len(analytics_df)
+        total_locations = analytics_df["location"].nunique()
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("♻️ Total Waste", f"{total_waste:,.2f} kg")
+        col2.metric("📝 Total Entries", total_entries)
+        col3.metric("📍 Locations", total_locations)
+
+        st.subheader("Waste by Category")
+        category_data = analytics_df.groupby(
+            "category"
+        )["weight_kg"].sum().sort_values(ascending=False)
+
+        st.bar_chart(category_data)
+
+        st.subheader("Waste by Location")
+        location_data = analytics_df.groupby(
+            "location"
+        )["weight_kg"].sum().sort_values(ascending=False)
+
+        st.bar_chart(location_data)
+
+        if "waste_date" in analytics_df.columns:
+            st.subheader("Waste Records Over Time")
+            analytics_df["waste_date"] = pd.to_datetime(
+                analytics_df["waste_date"], errors="coerce"
+            )
+            date_data = analytics_df.dropna(subset=["waste_date"])
+            date_data = date_data.groupby(
+                "waste_date"
+            )["weight_kg"].sum().sort_index()
+
+            if not date_data.empty:
+                st.line_chart(date_data)
+
+except Exception as e:
+    st.error(f"Could not load analytics: {e}")
