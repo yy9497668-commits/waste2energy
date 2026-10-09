@@ -13,11 +13,15 @@ st.title("♻️ Waste2Energy")
 st.write("Smart Waste Management & Energy Analytics")
 
 # Connect to Supabase using Streamlit Secrets
+
 @st.cache_resource
 def get_supabase_client():
+    url = st.secrets["SUPABASE_URL"].strip().rstrip("/")
+    st.write("Supabase URL format:", url.startswith("https://"),
+             url.endswith(".supabase.co"))
     return create_client(
-        st.secrets["SUPABASE_URL"],
-        st.secrets["SUPABASE_KEY"]
+        url,
+        st.secrets["SUPABASE_KEY"].strip()
     )
 
 try:
