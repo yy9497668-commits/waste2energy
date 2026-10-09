@@ -199,3 +199,50 @@ try:
 
 except Exception as e:
     st.error(f"Could not load analytics: {e}")
+
+st.divider()
+st.header("⚡ Waste-to-Energy Calculator")
+
+st.write(
+    "Estimate potential energy generation from the recorded waste. "
+    "These are illustrative estimates, not measured electricity output."
+)
+
+energy_factors = {
+    "Organic": 0.10,
+    "Paper": 0.20,
+    "Plastic": 0.70,
+    "Metal": 0.00,
+    "Glass": 0.00,
+    "Other": 0.10
+}
+
+st.caption(
+    "Illustrative factors only (kWh per kg). Actual output depends on "
+    "waste composition, moisture, technology and conversion efficiency."
+)
+
+selected_category = st.selectbox(
+    "Select Waste Category",
+    list(energy_factors.keys())
+)
+
+weight_kg = st.number_input(
+    "Enter Waste Weight (kg)",
+    min_value=0.0,
+    value=10.0,
+    step=1.0
+)
+
+if st.button("Calculate Estimated Energy"):
+    estimated_energy = weight_kg * energy_factors[selected_category]
+
+    st.metric(
+        "Estimated Energy Potential",
+        f"{estimated_energy:.2f} kWh"
+    )
+
+    st.info(
+        "This is a simplified illustrative estimate, not a guarantee "
+        "of electricity that can actually be generated."
+    )
