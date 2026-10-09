@@ -82,9 +82,9 @@ if page == "Add Waste":
                     st.success("Entry saved to the database!")
                     st.rerun()
 
-             except Exception as e:
-                    st.error(f"Database error: {e}"
-                            )
+            
+                except Exception as e:
+                    st.error(f"Database error: {e}")
 
 elif page == "Dashboard":
     st.subheader("Waste Dashboard")
