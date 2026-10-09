@@ -1,62 +1,143 @@
+
 import streamlit as st
 import pandas as pd
-from pathlib import Path
+from supabase import create_client
 
-st.set_page_config(page_title="Waste2Energy", page_icon="♻️")
+st.set_page_config(
+    page_title="Waste2Energy",
+    page_icon="♻️",
+    layout="wide"
+)
 
 st.title("♻️ Waste2Energy")
 st.write("Smart Waste Management & Energy Analytics")
 
-file = Path("waste_data.csv")
-
-if file.exists():
-    df = pd.read_csv(file)
-else:
-    df = pd.DataFrame(
-        columns=["Date", "Location", "Category", "Weight (kg)"]
+# Connect to Supabase using Streamlit Secrets
+@st.cache_resource
+def get_supabase_client():
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"]
     )
+
+try:
+    supabase = get_supabase_client()
+except Exception:
+    st.error(
+        "Database connection failed. Please check your "
+        "Streamlit Secrets settings."
+    )
+    st.stop()
+
+
+def load_data():
+    result = (
+        supabase.table("waste_entries")
+        .select("*")
+        .order("waste_date", desc=True)
+        .execute()
+    )
+    return pd.DataFrame(result.data)
+
 
 page = st.sidebar.radio(
     "Choose Page",
     ["Dashboard", "Add Waste", "View Data"]
 )
 
-if page == "Dashboard":
-    st.subheader("Waste Dashboard")
-    st.metric("Total Waste (kg)", round(df["Weight (kg)"].sum(), 2))
-    st.bar_chart(df.groupby("Category")["Weight (kg)"].sum())
+if page == "Add Waste":
+    st.subheader("Add a Waste Entry")
 
-elif page == "Add Waste":
     with st.form("waste_form"):
-        date = st.date_input("Date")
+        waste_date = st.date_input("Date")
         location = st.text_input("Location")
+
         category = st.selectbox(
             "Waste Category",
             ["Organic", "Paper", "Plastic", "Metal", "Other"]
         )
-        weight = st.number_input("Weight (kg)", min_value=0.0)
+
+        weight = st.number_input(
+            "Weight (kg)",
+            min_value=0.0,
+            step=0.5
+        )
+
         submitted = st.form_submit_button("Save Waste Entry")
 
         if submitted:
             if not location.strip() or weight <= 0:
-                st.warning("Enter a location and weight greater than zero.")
+                st.warning(
+                    "Enter a location and a weight greater than zero."
+                )
             else:
-                new_row = pd.DataFrame([{
-                    "Date": str(date),
-                    "Location": location,
-                    "Category": category,
-                    "Weight (kg)": weight
-                }])
-                df = pd.concat([df, new_row], ignore_index=True)
-                df.to_csv(file, index=False)
-                st.success("Waste entry saved!")
+                try:
+                    supabase.table("waste_entries").insert({
+                        "waste_date": waste_date.isoformat(),
+                        "location": location.strip(),
+                        "category": category,
+                        "weight_kg": weight
+                    }).execute()
+
+                    st.success("Entry saved to the database!")
+                    st.rerun()
+
+                except Exception:
+                    st.error(
+                        "Entry could not be saved. Please check "
+                        "your database settings and permissions."
+                    )
+
+elif page == "Dashboard":
+    st.subheader("Waste Dashboard")
+
+    try:
+        df = load_data()
+
+        if df.empty:
+            st.info("No waste records yet. Add your first entry!")
+        else:
+            total_waste = df["weight_kg"].sum()
+            organic_waste = df.loc[
+                df["category"] == "Organic", "weight_kg"
+            ].sum()
+
+            col1, col2 = st.columns(2)
+            col1.metric("Total Waste (kg)", f"{total_waste:.2f}")
+            col2.metric("Organic Waste (kg)", f"{organic_waste:.2f}")
+
+            category_totals = (
+                df.groupby("category")["weight_kg"].sum()
+            )
+
+            st.subheader("Waste by Category")
+            st.bar_chart(category_totals)
+
+        st.caption(
+            "Energy estimates are not included until a validated "
+            "conversion factor is selected."
+        )
+
+    except Exception:
+        st.error("Could not load dashboard data from the database.")
 
 elif page == "View Data":
     st.subheader("Waste Records")
-    st.dataframe(df, use_container_width=True)
-    st.download_button(
-        "Download CSV",
-        df.to_csv(index=False),
-        "waste_data.csv",
-        "text/csv"
-    )
+
+    try:
+        df = load_data()
+
+        if df.empty:
+            st.info("No records available yet.")
+        else:
+            st.dataframe(df, use_container_width=True)
+
+            st.download_button(
+                "Download CSV",
+                df.to_csv(index=False),
+                "waste_data.csv",
+                "text/csv"
+            )
+
+    except Exception:
+        st.error("Could not retrieve records from the database.")
