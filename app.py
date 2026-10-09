@@ -246,3 +246,79 @@ if st.button("Calculate Estimated Energy"):
         "This is a simplified illustrative estimate, not a guarantee "
         "of electricity that can actually be generated."
     )
+
+st.divider()
+st.header("⚡ Energy Analytics Dashboard")
+
+# Illustrative estimates in kWh per kg.
+# Replace these with verified factors for your chosen technology.
+energy_factors = {
+    "organic": 0.10,
+    "paper": 0.20,
+    "plastic": 0.70,
+    "metal": 0.00,
+    "other": 0.10
+}
+
+try:
+    response = supabase.table("waste_entries").select("*").execute()
+    energy_df = pd.DataFrame(response.data)
+
+    if energy_df.empty:
+        st.info("Add waste entries to see energy analytics.")
+    else:
+        energy_df["weight_kg"] = pd.to_numeric(
+            energy_df["weight_kg"], errors="coerce"
+        )
+        energy_df = energy_df.dropna(subset=["weight_kg"])
+        energy_df["category_key"] = (
+            energy_df["category"].astype(str).str.strip().str.lower()
+        )
+
+        energy_df["factor_kwh_per_kg"] = (
+            energy_df["category_key"].map(energy_factors)
+        )
+
+        energy_df["estimated_energy_kwh"] = (
+            energy_df["weight_kg"] * energy_df["factor_kwh_per_kg"]
+        )
+
+        total_energy = energy_df["estimated_energy_kwh"].sum()
+        known_df = energy_df.dropna(subset=["factor_kwh_per_kg"])
+
+        col1, col2 = st.columns(2)
+        col1.metric("Estimated Energy", f"{total_energy:,.2f} kWh")
+        col2.metric(
+            "Waste with Known Factors",
+            f"{known_df['weight_kg'].sum():,.2f} kg"
+        )
+
+        st.subheader("Estimated Energy by Category")
+        category_energy = known_df.groupby(
+            "category"
+        )["estimated_energy_kwh"].sum().sort_values(ascending=False)
+
+        st.bar_chart(category_energy)
+
+        st.subheader("Waste and Estimated Energy Records")
+        st.dataframe(
+            energy_df[
+                [
+                    "waste_date",
+                    "location",
+                    "category",
+                    "weight_kg",
+                    "estimated_energy_kwh"
+                ]
+            ],
+            use_container_width=True
+        )
+
+        st.caption(
+            "Energy values are illustrative estimates, not measured output. "
+            "Actual energy depends on waste composition, moisture and "
+            "conversion technology. Metal is assigned zero in this demo."
+        )
+
+except Exception as e:
+    st.error(f"Could not load energy analytics: {e}")
